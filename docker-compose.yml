@@ -29,7 +29,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: deps
+      target: build
     working_dir: /app
     environment:
       DATABASE_MIGRATE_URL: postgresql://postgres:postgres@postgres:5432/healthcare?schema=public

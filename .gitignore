@@ -7,3 +7,4 @@ coverage/
 .DS_Store
 /tmp/
 k6/results/
+.claude/
