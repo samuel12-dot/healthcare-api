@@ -32,15 +32,15 @@ services:
       target: deps
     working_dir: /app
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/healthcare?schema=public
+      DATABASE_MIGRATE_URL: postgresql://postgres:postgres@postgres:5432/healthcare?schema=public
     depends_on:
       postgres:
         condition: service_healthy
     entrypoint: ["sh", "-c"]
     command:
       - |
-        npx prisma migrate deploy && \
-        PGPASSWORD=postgres psql -h postgres -U postgres -d healthcare -f scripts/db-roles.sql
+        npx tsx scripts/migrate.ts migrate deploy && \
+        npx tsx scripts/apply-db-roles.ts
 
   app:
     build:

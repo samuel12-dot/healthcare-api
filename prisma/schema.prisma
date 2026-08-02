@@ -50,14 +50,14 @@ model User {
   passwordHash String   @map("password_hash")
   fullName     String   @map("full_name")
   role         UserRole
-  createdAt    DateTime @default(now()) @map("created_at")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  patient           Patient?
-  clinician         Clinician?
-  refreshTokens     RefreshToken[]
-  createdAppointments Appointment[]     @relation("AppointmentCreatedBy")
-  grantsGiven       AccessGrant[]      @relation("AccessGrantGrantedBy")
-  auditEntries      AuditLogEntry[]    @relation("AuditActor")
+  patient             Patient?
+  clinician           Clinician?
+  refreshTokens       RefreshToken[]
+  createdAppointments Appointment[]   @relation("AppointmentCreatedBy")
+  grantsGiven         AccessGrant[]   @relation("AccessGrantGrantedBy")
+  auditEntries        AuditLogEntry[] @relation("AuditActor")
 
   @@map("users")
 }
@@ -67,10 +67,10 @@ model RefreshToken {
   userId     String    @map("user_id") @db.Uuid
   tokenHash  String    @unique @map("token_hash")
   family     String    @db.Uuid
-  revokedAt  DateTime? @map("revoked_at")
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
   replacedBy String?   @map("replaced_by") @db.Uuid
-  expiresAt  DateTime  @map("expires_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user User @relation(fields: [userId], references: [id])
 
@@ -85,7 +85,7 @@ model Patient {
   sex         String
   phone       String?
   address     String?
-  createdAt   DateTime @default(now()) @map("created_at")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user           User?           @relation(fields: [userId], references: [id])
   medicalRecords MedicalRecord[]
@@ -102,7 +102,7 @@ model Clinician {
   specialty     String
   licenseNumber String @map("license_number")
 
-  user           User            @relation(fields: [userId], references: [id])
+  user            User            @relation(fields: [userId], references: [id])
   authoredRecords MedicalRecord[]
   appointments    Appointment[]
   accessGrants    AccessGrant[]
@@ -117,28 +117,28 @@ model MedicalRecord {
   recordType     RecordType @map("record_type")
   content        Json
   amendsRecordId String?    @map("amends_record_id") @db.Uuid
-  createdAt      DateTime   @default(now()) @map("created_at")
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  patient      Patient         @relation(fields: [patientId], references: [id])
-  author       Clinician       @relation(fields: [authoredBy], references: [id])
-  amends       MedicalRecord?  @relation("Amendments", fields: [amendsRecordId], references: [id])
-  amendedBy    MedicalRecord[] @relation("Amendments")
+  patient   Patient         @relation(fields: [patientId], references: [id])
+  author    Clinician       @relation(fields: [authoredBy], references: [id])
+  amends    MedicalRecord?  @relation("Amendments", fields: [amendsRecordId], references: [id])
+  amendedBy MedicalRecord[] @relation("Amendments")
 
   @@index([patientId, createdAt])
   @@map("medical_records")
 }
 
 model Appointment {
-  id          String            @id @default(uuid()) @db.Uuid
-  patientId   String            @map("patient_id") @db.Uuid
-  clinicianId String            @map("clinician_id") @db.Uuid
-  startTime   DateTime          @map("start_time")
-  endTime     DateTime          @map("end_time")
-  status      AppointmentStatus @default(scheduled)
-  reason      String?
-  createdBy   String            @map("created_by") @db.Uuid
-  idempotencyKey String?        @unique @map("idempotency_key")
-  createdAt   DateTime          @default(now()) @map("created_at")
+  id             String            @id @default(uuid()) @db.Uuid
+  patientId      String            @map("patient_id") @db.Uuid
+  clinicianId    String            @map("clinician_id") @db.Uuid
+  startTime      DateTime          @map("start_time") @db.Timestamptz(3)
+  endTime        DateTime          @map("end_time") @db.Timestamptz(3)
+  status         AppointmentStatus @default(scheduled)
+  reason         String?
+  createdBy      String            @map("created_by") @db.Uuid
+  idempotencyKey String?           @unique @map("idempotency_key")
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
 
   patient   Patient   @relation(fields: [patientId], references: [id])
   clinician Clinician @relation(fields: [clinicianId], references: [id])
@@ -155,9 +155,9 @@ model AccessGrant {
   clinicianId String            @map("clinician_id") @db.Uuid
   grantedBy   String            @map("granted_by") @db.Uuid
   reason      AccessGrantReason
-  expiresAt   DateTime?         @map("expires_at")
-  revokedAt   DateTime?         @map("revoked_at")
-  createdAt   DateTime          @default(now()) @map("created_at")
+  expiresAt   DateTime?         @map("expires_at") @db.Timestamptz(3)
+  revokedAt   DateTime?         @map("revoked_at") @db.Timestamptz(3)
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
 
   patient   Patient   @relation(fields: [patientId], references: [id])
   clinician Clinician @relation(fields: [clinicianId], references: [id])
@@ -175,7 +175,7 @@ model AuditLogEntry {
   resourceId   String      @map("resource_id") @db.Uuid
   patientId    String?     @map("patient_id") @db.Uuid
   metadata     Json?
-  occurredAt   DateTime    @default(now()) @map("occurred_at")
+  occurredAt   DateTime    @default(now()) @map("occurred_at") @db.Timestamptz(3)
 
   actor   User     @relation("AuditActor", fields: [actorUserId], references: [id])
   patient Patient? @relation(fields: [patientId], references: [id])

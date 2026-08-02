@@ -18,8 +18,8 @@
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration --pool=forks --poolOptions.forks.singleFork=true",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:deploy": "prisma migrate deploy",
+    "prisma:migrate": "tsx scripts/migrate.ts migrate dev",
+    "prisma:deploy": "tsx scripts/migrate.ts migrate deploy",
     "db:roles": "tsx scripts/apply-db-roles.ts",
     "k6": "k6 run k6/load-test.js"
   },
@@ -46,6 +46,7 @@
     "@types/pg": "^8.11.10",
     "@types/supertest": "^6.0.2",
     "@types/uuid": "^10.0.0",
+    "dotenv": "^16.4.5",
     "pino-pretty": "^11.3.0",
     "@typescript-eslint/eslint-plugin": "^8.13.0",
     "@typescript-eslint/parser": "^8.13.0",
