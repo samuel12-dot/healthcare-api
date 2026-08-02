@@ -8,7 +8,7 @@ import {
 } from "../policy/accessGrantPolicy";
 import type { CreateAccessGrantInput } from "./schemas";
 
-function toGrantDto(grant: {
+export function toGrantDto(grant: {
   id: string;
   patientId: string;
   clinicianId: string;
