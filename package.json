@@ -21,12 +21,14 @@
     "prisma:migrate": "tsx scripts/migrate.ts migrate dev",
     "prisma:deploy": "tsx scripts/migrate.ts migrate deploy",
     "db:roles": "tsx scripts/apply-db-roles.ts",
+    "db:seed-admin": "tsx scripts/seed-admin.ts",
     "k6": "k6 run k6/load-test.js"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
     "argon2": "^0.41.1",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "helmet": "^7.2.0",
     "ioredis": "^5.4.1",
@@ -46,7 +48,6 @@
     "@types/pg": "^8.11.10",
     "@types/supertest": "^6.0.2",
     "@types/uuid": "^10.0.0",
-    "dotenv": "^16.4.5",
     "pino-pretty": "^11.3.0",
     "@typescript-eslint/eslint-plugin": "^8.13.0",
     "@typescript-eslint/parser": "^8.13.0",
