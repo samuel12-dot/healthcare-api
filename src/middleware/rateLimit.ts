@@ -17,7 +17,7 @@ function rateLimiter(prefix: string, points: number, durationSeconds: number) {
         return;
       }
       next();
-    } catch (err) {
+    } catch {
       // Fail open: a Redis outage shouldn't take down the whole API.
       next();
     }

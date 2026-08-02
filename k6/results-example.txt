@@ -1,0 +1,40 @@
+Example k6 run against a local Docker Compose stack (M-series Mac, 20 VUs,
+70s ramping profile -- see README "Load testing" for exact setup/commands).
+
+  █ THRESHOLDS
+
+    http_req_duration
+    ✓ 'p(95)<300' p(95)=12.94ms
+    ✓ 'p(99)<800' p(99)=17.81ms
+
+    http_req_failed
+    ✓ 'rate<0.01' rate=0.00%
+
+
+  █ TOTAL RESULTS
+
+    checks_total.......: 4313    60.786549/s
+    checks_succeeded...: 100.00% 4313 out of 4313
+    checks_failed......: 0.00%   0 out of 4313
+
+    ✓ setup login succeeded
+    ✓ health is 200
+    ✓ records list ok
+    ✓ appointments list ok
+    ✓ availability ok
+
+    HTTP
+    http_req_duration..............: avg=6.55ms min=845µs med=5.79ms max=107.35ms p(90)=11.26ms p(95)=12.94ms
+      { expected_response:true }...: avg=6.55ms min=845µs med=5.79ms max=107.35ms p(90)=11.26ms p(95)=12.94ms
+    http_req_failed................: 0.00%  0 out of 4313
+    http_reqs......................: 4313   60.786549/s
+
+    EXECUTION
+    iteration_duration.............: avg=1.02s  min=1s    med=1.02s  max=1.06s    p(90)=1.03s   p(95)=1.03s
+    iterations.....................: 1078   15.193114/s
+    vus............................: 1      min=0         max=20
+    vus_max........................: 20     min=20        max=20
+
+    NETWORK
+    data_received..................: 4.3 MB 61 kB/s
+    data_sent......................: 1.6 MB 23 kB/s

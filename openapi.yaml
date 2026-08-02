@@ -1,0 +1,726 @@
+openapi: 3.0.3
+info:
+  title: Patient Records & Appointments API
+  version: "1.0.0"
+  description: >
+    RBAC + explicit access grants, append-only medical records, a
+    tamper-resistant audit log, and conflict-free appointment scheduling.
+    See README.md for architecture and design-decision rationale.
+servers:
+  - url: /api/v1
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+  - name: Patients
+  - name: Medical Records
+  - name: Access Grants
+  - name: Emergency Access
+  - name: Appointments
+  - name: Clinicians
+  - name: Admin
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new patient-role user (self-service)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, fullName]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 10, maxLength: 128 }
+                fullName: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserSummary" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in and receive an access + refresh token pair
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthTokens" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Rotate a refresh token for a new access + refresh pair
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        "200":
+          description: Rotated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthTokens" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Revoke a refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        "204": { description: Revoked }
+
+  /patients:
+    post:
+      tags: [Patients]
+      summary: Create a patient record (self-service, front-desk, or admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreatePatientInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Patient" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /patients/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PatientId"
+    get:
+      tags: [Patients]
+      summary: Get a patient's profile (contact/demographic PII only, never medical record content)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Patient" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    patch:
+      tags: [Patients]
+      summary: Update a patient's contact info
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phone: { type: string }
+                address: { type: string }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Patient" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /patients/{id}/records:
+    parameters:
+      - $ref: "#/components/parameters/PatientId"
+    post:
+      tags: [Medical Records]
+      summary: Create a medical record (clinician with an active access grant only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRecordInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalRecord" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    get:
+      tags: [Medical Records]
+      summary: List a patient's records (self, or clinician with an active access grant)
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/MedicalRecord" }
+                  nextCursor: { type: string, nullable: true }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /records/{id}:
+    get:
+      tags: [Medical Records]
+      summary: Get a single medical record
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalRecord" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /records/{id}/amend:
+    post:
+      tags: [Medical Records]
+      summary: Create a correcting record that references the original (records are append-only, never updated/deleted)
+      parameters:
+        - $ref: "#/components/parameters/RecordId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateRecordInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MedicalRecord" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /patients/{id}/access-grants:
+    parameters:
+      - $ref: "#/components/parameters/PatientId"
+    post:
+      tags: [Access Grants]
+      summary: Grant a clinician access to this patient's records (patient themselves, or admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAccessGrantInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccessGrant" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    get:
+      tags: [Access Grants]
+      summary: List who currently has access to this patient's record (patient themselves, or admin)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/AccessGrant" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /access-grants/{id}/revoke:
+    post:
+      tags: [Access Grants]
+      summary: Revoke an access grant (the patient, the original grantor, or admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Revoked (idempotent)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccessGrant" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /patients/{id}/emergency-access:
+    parameters:
+      - $ref: "#/components/parameters/PatientId"
+    post:
+      tags: [Emergency Access]
+      summary: >
+        Break-glass access request (clinician only -- admins are not exempt
+        and must use this same path). Creates a 24h time-boxed AccessGrant
+        (reason=emergency_override) and a distinctly-tagged audit entry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [justification]
+              properties:
+                justification: { type: string, minLength: 10, maxLength: 2000 }
+      responses:
+        "201":
+          description: Emergency access granted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccessGrant" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /appointments:
+    post:
+      tags: [Appointments]
+      summary: Book an appointment (requires Idempotency-Key; rejects overlapping slots for the clinician)
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateAppointmentInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Appointment" }
+        "200":
+          description: Idempotent replay of a prior request with the same Idempotency-Key
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Appointment" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409":
+          description: The clinician already has an overlapping appointment
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /appointments/{id}:
+    patch:
+      tags: [Appointments]
+      summary: Reschedule an appointment (re-checks overlap)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [startTime, endTime]
+              properties:
+                startTime: { type: string, format: date-time }
+                endTime: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Rescheduled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Appointment" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "422": { $ref: "#/components/responses/Problem" }
+
+  /appointments/{id}/cancel:
+    post:
+      tags: [Appointments]
+      summary: Cancel an appointment (idempotent)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Appointment" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /patients/{id}/appointments:
+    parameters:
+      - $ref: "#/components/parameters/PatientId"
+    get:
+      tags: [Appointments]
+      summary: Paginated appointment history for a patient
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Appointment" }
+                  nextCursor: { type: string, nullable: true }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /clinicians/{id}/availability:
+    get:
+      tags: [Clinicians]
+      summary: Open slots for a clinician on a given day
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: date
+          in: query
+          required: true
+          schema: { type: string, example: "2027-03-15" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clinicianId: { type: string, format: uuid }
+                  date: { type: string }
+                  slots:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        startTime: { type: string, format: date-time }
+                        endTime: { type: string, format: date-time }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /admin/users:
+    post:
+      tags: [Admin]
+      summary: Create a user of any role (admin only). Non-patient roles can only be created here.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateUserInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserSummary" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /admin/audit-log:
+    get:
+      tags: [Admin]
+      summary: >
+        Query the audit trail (admin only). Querying it is itself a
+        sensitive, audited action.
+      parameters:
+        - name: patient_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: actor_user_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: action
+          in: query
+          schema: { $ref: "#/components/schemas/AuditAction" }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/AuditLogEntry" }
+                  nextCursor: { type: string, nullable: true }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /health:
+    get:
+      tags: [Admin]
+      summary: Liveness/readiness check (DB + Redis)
+      security: []
+      responses:
+        "200": { description: Healthy }
+        "503": { description: Degraded }
+
+  /metrics:
+    get:
+      tags: [Admin]
+      summary: Prometheus metrics
+      security: []
+      responses:
+        "200": { description: OK }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PatientId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RecordId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
+      description: Opaque keyset pagination cursor from a previous page's nextCursor
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 20 }
+
+  responses:
+    Problem:
+      description: RFC 7807 problem+json error
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+
+  schemas:
+    Problem:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        requestId: { type: string }
+
+    UserRole:
+      type: string
+      enum: [patient, clinician, admin, front_desk]
+
+    UserSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        role: { $ref: "#/components/schemas/UserRole" }
+
+    AuthTokens:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        refreshExpiresAt: { type: string, format: date-time }
+        user: { $ref: "#/components/schemas/UserSummary" }
+
+    CreateUserInput:
+      type: object
+      required: [email, password, fullName, role]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 10, maxLength: 128 }
+        fullName: { type: string }
+        role: { $ref: "#/components/schemas/UserRole" }
+        clinician:
+          type: object
+          description: Required when role=clinician
+          properties:
+            specialty: { type: string }
+            licenseNumber: { type: string }
+
+    Patient:
+      type: object
+      description: PII fields (dateOfBirth, phone, address) -- see README "Security" section.
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, format: uuid, nullable: true }
+        dateOfBirth: { type: string, format: date }
+        sex: { type: string }
+        phone: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    CreatePatientInput:
+      type: object
+      required: [dateOfBirth, sex]
+      properties:
+        userId: { type: string, format: uuid }
+        dateOfBirth: { type: string, format: date }
+        sex: { type: string }
+        phone: { type: string }
+        address: { type: string }
+
+    RecordType:
+      type: string
+      enum: [note, diagnosis, prescription, lab_result, vitals]
+
+    MedicalRecord:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        patientId: { type: string, format: uuid }
+        authoredBy: { type: string, format: uuid }
+        recordType: { $ref: "#/components/schemas/RecordType" }
+        content: { type: object, description: "Shape depends on recordType" }
+        amendsRecordId: { type: string, format: uuid, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    CreateRecordInput:
+      type: object
+      required: [recordType, content]
+      properties:
+        recordType: { $ref: "#/components/schemas/RecordType" }
+        content: { type: object }
+
+    AccessGrantReason:
+      type: string
+      enum: [active_care, referral, emergency_override]
+
+    AccessGrant:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        patientId: { type: string, format: uuid }
+        clinicianId: { type: string, format: uuid }
+        grantedBy: { type: string, format: uuid }
+        reason: { $ref: "#/components/schemas/AccessGrantReason" }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        revokedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        active: { type: boolean }
+
+    CreateAccessGrantInput:
+      type: object
+      required: [clinicianId, reason]
+      properties:
+        clinicianId: { type: string, format: uuid }
+        reason:
+          type: string
+          enum: [active_care, referral]
+          description: emergency_override can only be set via POST /patients/{id}/emergency-access
+        expiresAt: { type: string, format: date-time }
+
+    AppointmentStatus:
+      type: string
+      enum: [scheduled, confirmed, cancelled, completed, no_show]
+
+    Appointment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        patientId: { type: string, format: uuid }
+        clinicianId: { type: string, format: uuid }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        status: { $ref: "#/components/schemas/AppointmentStatus" }
+        reason: { type: string, nullable: true }
+        createdBy: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+
+    CreateAppointmentInput:
+      type: object
+      required: [patientId, clinicianId, startTime, endTime]
+      properties:
+        patientId: { type: string, format: uuid }
+        clinicianId: { type: string, format: uuid }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        reason: { type: string }
+
+    AuditAction:
+      type: string
+      enum: [view, create, update, export, emergency_override]
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        actorUserId: { type: string, format: uuid }
+        action: { $ref: "#/components/schemas/AuditAction" }
+        resourceType: { type: string }
+        resourceId: { type: string, format: uuid }
+        patientId: { type: string, format: uuid, nullable: true }
+        metadata: { type: object, nullable: true }
+        occurredAt: { type: string, format: date-time }
